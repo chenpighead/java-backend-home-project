@@ -3,6 +3,7 @@ package com.test.bank.model.admin;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.Sets;
 
+import javax.validation.constraints.NotNull;
 import java.security.Principal;
 import java.util.Set;
 
@@ -16,8 +17,10 @@ public class AdminUserVo implements Principal {
 
     private Integer id;
 
+    @NotNull
     private String account;
 
+    @NotNull
     private String password;
 
     private Set<String> roleSet = Sets.newHashSet();
