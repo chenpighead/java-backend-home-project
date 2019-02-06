@@ -10,12 +10,17 @@ import io.dropwizard.auth.Authenticator;
 import io.dropwizard.auth.Authorizer;
 import io.dropwizard.setup.Environment;
 import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
+import org.jose4j.jwt.MalformedClaimException;
 import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.jwt.consumer.JwtContext;
 import org.jose4j.keys.HmacKey;
+import org.redisson.api.RMap;
 import org.redisson.api.RedissonClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.ForbiddenException;
 import java.security.Principal;
 import java.util.Optional;
 
@@ -56,6 +61,7 @@ public class JwtInitializer {
 
     private static class AdminAuthenticator implements Authenticator<JwtContext, AdminUserVo> {
 
+        Logger log = LoggerFactory.getLogger(AdminAuthenticator.class);
         RedissonClient redissonClient;
 
         public AdminAuthenticator(RedissonClient redissonClient) {
@@ -65,7 +71,14 @@ public class JwtInitializer {
         @Override
         public Optional<AdminUserVo> authenticate(JwtContext context) {
             // TODO add token authentication from redis
-            return null;
+            try {
+                String subject = context.getJwtClaims().getSubject();
+                RMap<String, AdminUserVo> map = redissonClient.getMap("anyMap");
+                return Optional.ofNullable(map.get(subject));
+            } catch (MalformedClaimException exception) {
+                log.debug("Cannot read malformed claim");
+                throw new ForbiddenException();
+            }
         }
     }
 

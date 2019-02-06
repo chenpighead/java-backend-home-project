@@ -1,6 +1,5 @@
 package com.test.bank.resource;
 
-
 import com.test.bank.initializer.RedissonInitializer;
 import com.test.bank.model.admin.AdminUserVo;
 import com.test.bank.service.AdminService;
@@ -9,6 +8,7 @@ import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.keys.HmacKey;
 import org.jose4j.lang.JoseException;
+import org.redisson.api.RMap;
 import org.redisson.api.RedissonClient;
 
 import javax.inject.Inject;
@@ -23,7 +23,6 @@ import static org.jose4j.mac.MacUtil.HMAC_SHA256;
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class AdminResource extends BaseResource {
-
     private final byte[] jwtTokenSecret;
     private AdminService adminService;
     private RedissonClient redissonClient;
@@ -61,8 +60,9 @@ public class AdminResource extends BaseResource {
         String token = jws.getCompactSerialization();
 
         // TODO add redis save token
+        RMap<String, AdminUserVo> map = redissonClient.getMap("anyMap");
+        map.put(String.valueOf(adminUser.getId()), adminUser);
 
-
-        return Response.ok().build();
+        return Response.ok(token).build();
     }
 }
