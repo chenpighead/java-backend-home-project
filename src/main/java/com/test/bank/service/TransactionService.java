@@ -1,9 +1,13 @@
 package com.test.bank.service;
 
+import com.google.common.collect.Lists;
 import com.test.bank.constant.Action;
+import com.test.bank.db.tables.pojos.Transaction;
 import com.test.bank.initializer.DataSourceInitializer;
 import com.test.bank.model.transaction.TransactionVo;
 import org.jooq.DSLContext;
+import org.jooq.Record;
+import org.jooq.Result;
 import org.jooq.impl.DSL;
 import org.jooq.impl.DefaultConfiguration;
 import org.jooq.types.UInteger;
@@ -12,6 +16,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+
+import java.util.List;
 
 import static com.test.bank.db.tables.Transaction.TRANSACTION;
 import static com.test.bank.db.tables.User.USER;
@@ -95,7 +101,29 @@ public class TransactionService {
 
     public TransactionVo getTransactionLog(int userId) {
         // TODO implement getTransactionLog
-        return null;
+        if (!validateUserId(userId)) {
+            log.debug("Invalid userId: " + userId);
+            return null;
+        }
+        Result<?> records = DSL.using(this.jooqConfiguration)
+                .select()
+                .from(TRANSACTION)
+                .where(TRANSACTION.FROMUSERID.eq(UInteger.valueOf(userId)))
+                .or(TRANSACTION.TOUSERID.eq(UInteger.valueOf(userId)))
+                .fetch();
+        List<Transaction> transactionList = Lists.newArrayList();
+        for (Record r : records) {
+            transactionList.add(
+                    new Transaction(
+                    r.getValue(TRANSACTION.ID),
+                    r.getValue(TRANSACTION.FROMUSERID),
+                    r.getValue(TRANSACTION.TOUSERID),
+                    r.getValue(TRANSACTION.ACTION),
+                    r.getValue(TRANSACTION.ADMINID),
+                    r.getValue(TRANSACTION.CREATEDAT)
+            ));
+        }
+        return new TransactionVo(transactionList);
     }
 
     public void creditAndDebit(int userId, int amount, int adminId) {
