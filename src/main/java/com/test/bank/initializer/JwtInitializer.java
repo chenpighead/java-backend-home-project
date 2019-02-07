@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.ForbiddenException;
 import java.security.Principal;
 import java.util.Optional;
+import java.util.Set;
 
 public class JwtInitializer {
 
@@ -83,16 +84,18 @@ public class JwtInitializer {
     }
 
     private static class AdminAuthorizer implements Authorizer<AdminUserVo> {
+        Logger log = LoggerFactory.getLogger(AdminAuthorizer.class);
 
         @Override
         public boolean authorize(AdminUserVo user, String role)
         {
             // TODO add other role authorize, thinking how to retrieve the role information
-
-            if(user.getRoleSet().contains(Role.SUPER_ADMIN)) {
+            Set<String> roles = user.getRoleSet();
+            if (roles.contains(role) || roles.contains(Role.SUPER_ADMIN)) {
+                log.debug("Successfully authorize " + user.getAccount() + " with role: " + role);
                 return true;
             }
-
+            log.debug("Fail to authorize " + user.getAccount() + " with role: " + role);
             return false;
         }
     }
