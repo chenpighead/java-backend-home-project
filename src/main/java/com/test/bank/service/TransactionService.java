@@ -128,5 +128,38 @@ public class TransactionService {
 
     public void creditAndDebit(int userId, int amount, int adminId) {
         // TODO implement creditAndDebit
+        if (!validateUserId(userId)) {
+            log.debug("Invalid userId: " + userId);
+            return;
+        }
+        DSLContext dsl = DSL.using(this.jooqConfiguration);
+        // Use jOOQ transaction API to help with transaction / rollback management
+        // ref: https://www.jooq.org/doc/3.11/manual/sql-execution/transaction-management/
+        try {
+            dsl.transaction(configuration -> {
+                Integer wallet = DSL.using(configuration)
+                        .select()
+                        .from(USER)
+                        .where(USER.ID.eq(UInteger.valueOf((userId))))
+                        .fetchOne()
+                        .getValue(USER.WALLET);
+                DSL.using(configuration)
+                        .insertInto(USER, USER.ID, USER.WALLET)
+                        .values(UInteger.valueOf(userId), wallet + amount)
+                        .onDuplicateKeyUpdate()
+                        .set(USER.WALLET, wallet + amount)
+                        .execute();
+            });
+        } catch (RuntimeException e) {
+            log.debug("Transaction 'credit / debit' failed, rolls back the transaction");
+            throw new RuntimeException(e.getMessage(), e);
+        }
+        log.debug("Transaction 'credit / debit' successful");
+        dsl.insertInto(TRANSACTION,
+                TRANSACTION.FROMUSERID, TRANSACTION.ACTION, TRANSACTION.ADMINID)
+                .values(UInteger.valueOf(userId),
+                        Byte.valueOf(Action.CREDIT_AND_DEBIT),
+                        UInteger.valueOf(adminId))
+                .execute();
     }
 }
