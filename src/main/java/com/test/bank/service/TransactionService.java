@@ -41,6 +41,21 @@ public class TransactionService {
                 .where(USER.ID.eq((UInteger.valueOf(userId)))));
     }
 
+    private boolean validateWallet(int userId, int amount) {
+        int wallet = DSL.using(this.jooqConfiguration)
+                .select()
+                .from(USER)
+                .where(USER.ID.eq(UInteger.valueOf(userId)))
+                .fetchOne()
+                .getValue(USER.WALLET);
+        if (wallet >= amount) {
+            return true;
+        } else {
+            log.debug("Not enough money, credit " + amount + " with wallet: " + wallet);
+            return false;
+        }
+    }
+
     public void transfer(int fromUserId, int toUserId, int amount, int adminId) {
         // TODO implement transfer
         if (!validateUserId(fromUserId)) {
@@ -51,34 +66,45 @@ public class TransactionService {
             log.debug("Invalid toUserId: " + toUserId);
             return;
         }
-        DSLContext dsl = DSL.using(this.jooqConfiguration);
-        int fromUserWallet = dsl
-                .select()
-                .from(USER)
-                .where(USER.ID.eq(UInteger.valueOf(fromUserId)))
-                .fetchOne()
-                .getValue(USER.WALLET);
-        if (fromUserWallet < amount) {
-            log.debug("Not enough, transfer " + amount + " with wallet: " + fromUserWallet);
+        if (fromUserId == toUserId) {
+            // XXX: transfer to same user, so this is a creditAndDebit transaction!
+            //      or, should we avoid / throw this?
+            log.debug("transfer to same user, actually a creditAndDebit, calling it");
+            creditAndDebit(fromUserId, amount, adminId);
             return;
         }
-        int toUserWallet = dsl
-                .select()
-                .from(USER)
-                .where(USER.ID.eq(UInteger.valueOf(toUserId)))
-                .fetchOne()
-                .getValue(USER.WALLET);
+        if (amount < 0) {
+            log.debug("Invalid amount, can't transfer with negative amount: " + amount);
+            return;
+        }
+        if (!validateWallet(fromUserId, amount)) {
+            return;
+        }
+        DSLContext dsl = DSL.using(this.jooqConfiguration);
         // Use jOOQ transaction API to help with transaction / rollback management
         // ref: https://www.jooq.org/doc/3.11/manual/sql-execution/transaction-management/
         try {
             dsl.transaction(configuration -> {
-                DSL.using(configuration)
+                DSLContext ctx = DSL.using(configuration);
+                int fromUserWallet = ctx
+                        .select()
+                        .from(USER)
+                        .where(USER.ID.eq(UInteger.valueOf(fromUserId)))
+                        .fetchOne()
+                        .getValue(USER.WALLET);
+                int toUserWallet = ctx
+                        .select()
+                        .from(USER)
+                        .where(USER.ID.eq(UInteger.valueOf(toUserId)))
+                        .fetchOne()
+                        .getValue(USER.WALLET);
+                ctx
                         .insertInto(USER, USER.ID, USER.WALLET)
                         .values(UInteger.valueOf(fromUserId), fromUserWallet - amount)
                         .onDuplicateKeyUpdate()
                         .set(USER.WALLET, fromUserWallet - amount)
                         .execute();
-                DSL.using(configuration)
+                ctx
                         .insertInto(USER, USER.ID, USER.WALLET)
                         .values(UInteger.valueOf(toUserId), toUserWallet + amount)
                         .onDuplicateKeyUpdate()
@@ -130,6 +156,9 @@ public class TransactionService {
         // TODO implement creditAndDebit
         if (!validateUserId(userId)) {
             log.debug("Invalid userId: " + userId);
+            return;
+        }
+        if (amount < 0 && !validateWallet(userId, -amount)) {
             return;
         }
         DSLContext dsl = DSL.using(this.jooqConfiguration);
